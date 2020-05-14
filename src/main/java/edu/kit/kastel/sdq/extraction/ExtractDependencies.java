@@ -15,39 +15,60 @@ public class ExtractDependencies implements IExtractDependencies {
 												"Bundle-RequiredExecutionEnvironment", 
 												"Export-Package",
 												"Bundle-Vendor"};
+	private boolean fileEnd;
+	private boolean requiresBlockReached;
+	
+	
 	@Override
 	public List<String> extractDependenciesFromMetadata(String path) throws FileNotFoundException {
-			List<String> dependencies = new ArrayList<>();
-			if(isEcipsePluginProject(path)) {
-				path += manifest;
-				File f = new File(path);
-				if(f.canRead()) {
-					Scanner s = new Scanner(f);
-					boolean requiresBlockReached = false;
-					boolean fileEnd = false;
-					while(s.hasNext()) {
-						String line = s.nextLine();
-						if(line.contains("Require-Bundle:")) {
-							requiresBlockReached = true;
-							line = line.replace("Require-Bundle: ", "");
-						}
-						
-						if(requiresBlockReached) {
-							for(String excl : Arrays.asList(exclusionCriteria)) {
-								if(line.contains(excl))
-									fileEnd = true;
-							}
-							if(!fileEnd) {
-								if(line.contains(";")) {
-									line = line.substring(0, line.indexOf(';'));
-								}
-								dependencies.add(line);
-							}
-						}
-					}
-				}
+		List<String> dependencies = new ArrayList<>();
+		if(isEcipsePluginProject(path)) {
+			loadAndReadDependenciesOfFile(path, dependencies);
+		}
+		return dependencies;
+	}
+
+
+	private void loadAndReadDependenciesOfFile(String path, List<String> dependencies) throws FileNotFoundException {
+		path += manifest;
+		File manifestFile = new File(path);
+		if(manifestFile.canRead()) {
+			readDependenciesOfFile(dependencies, manifestFile);
+		}
+	}
+
+
+	private void readDependenciesOfFile(List<String> dependencies, File manifestFile) throws FileNotFoundException {
+		Scanner s = new Scanner(manifestFile);
+		requiresBlockReached = false;
+		fileEnd = false;
+		while(s.hasNext()) {
+			String line = s.nextLine();
+			if(line.contains("Require-Bundle:")) {
+				requiresBlockReached = true;
+				line = line.replace("Require-Bundle: ", "");
 			}
-			return dependencies;
+			
+			extractDependencyFromLine(dependencies, requiresBlockReached, line);
+		}
+		s.close();
+	}
+
+
+	private boolean extractDependencyFromLine(List<String> dependencies, boolean requiresBlockReached, String line) {
+		if(requiresBlockReached) {
+			for(String excl : Arrays.asList(exclusionCriteria)) {
+				if(line.contains(excl))
+					fileEnd = true;
+			}
+			if(!fileEnd) {
+				if(line.contains(";")) {
+					line = line.substring(0, line.indexOf(';'));
+				}
+				dependencies.add(line);
+			}
+		}
+		return fileEnd;
 	}
 
 	private boolean isEcipsePluginProject(String path) {
